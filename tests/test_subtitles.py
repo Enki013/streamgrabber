@@ -38,9 +38,7 @@ def test_parse_release_matches_streamimdb_ptt_fields():
     assert info.season == 1
     assert info.episode == 2
     assert info.resolution == '1080p'
-    # StreamIMDB's PTT loop stops at the first quality token; when 1080p appears
-    # before BluRay, resolution is set and quality remains unset.
-    assert info.quality is None
+    assert info.quality == 'BluRay'
     assert info.codec == 'x264'
     assert info.release_group == 'shortbrehd'
 
@@ -55,7 +53,7 @@ def test_streamimdb_match_score_rewards_exact_release_metadata():
 
 def test_choose_best_subtitle_prefers_streamimdb_ptt_match_over_downloads():
     subs = [
-        {'SubFileName': 'Better.Call.Saul.S01E02.720p.NF.WEBRip.DD5.1.x264-NTb.srt', 'SubDownloadsCnt': '99999'},
+        {'SubFileName': 'Better.Call.Saul.S01E02.Mijo.720p.NF.WEBRip.DD5.1.x264-NTb.srt', 'SubDownloadsCnt': '99999'},
         {'SubFileName': 'better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.srt', 'SubDownloadsCnt': '10'},
     ]
     selected = choose_best_subtitle(
@@ -66,6 +64,21 @@ def test_choose_best_subtitle_prefers_streamimdb_ptt_match_over_downloads():
         episode=2,
     )
     assert selected['SubFileName'] == 'better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.srt'
+
+
+def test_choose_best_subtitle_prefers_bluray_over_high_download_webrip_for_bluray_video():
+    subs = [
+        {'SubFileName': 'Better.Call.Saul.S01E02.Mijo.720p.NF.WEBRip.DD5.1.x264-NTb.srt', 'SubDownloadsCnt': '13512'},
+        {'SubFileName': 'Better.Call.Saul.S01E02.720p.Bluray.x264.srt', 'SubDownloadsCnt': '1709'},
+    ]
+    selected = choose_best_subtitle(
+        subs,
+        title='Better Call Saul 2015',
+        file_name='Better.Call.Saul.S01.1080p.BluRay.x264-Scene/better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.mkv',
+        season=1,
+        episode=2,
+    )
+    assert selected['SubFileName'] == 'Better.Call.Saul.S01E02.720p.Bluray.x264.srt'
 
 
 def test_choose_best_subtitle_falls_back_to_downloads_without_any_release_info():

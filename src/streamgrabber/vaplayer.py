@@ -59,6 +59,12 @@ def episode_output_name(title: str, season: int, episode: int, file_name: str = 
     return f"{base} S{season:02d}E{episode:02d}.mkv"
 
 
+def movie_output_name(title: str, file_name: str = "") -> str:
+    # Prefer API title; upstream file_name is often noisy release text and may include directories.
+    base = sanitize_filename(title or Path(file_name).stem or "streamgrabber-output")
+    return f"{base}.mkv"
+
+
 def episode_info(media_id: str, media_type: str, season: int | None = None, episode: int | None = None) -> EpisodeInfo:
     payload = fetch_streamdata(media_id, media_type, season, episode)
     data = payload.get("data") or {}

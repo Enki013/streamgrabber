@@ -15,6 +15,7 @@ It is designed for Stream Detector-style workflows where the page URL may stay t
 - Automatically generates the output filename if you do not pass `--output`.
 - For supported TV players, can list/download a specific episode or an entire season.
 - Handles fixed-URL players where episode changes happen through an internal API rather than the browser URL.
+- Accepts direct StreamIMDB embeds, IMDb title URLs, PlayIMDb URLs, or bare IMDb IDs such as `tt0096895`.
 
 ## Requirements
 
@@ -64,6 +65,65 @@ streamgrabber-py
 ```
 
 ## Basic usage
+
+### Supported input forms
+
+You can pass a direct embed URL:
+
+```bash
+streamgrabber-py 'https://streamimdb.ru/embed/movie/tt0096895'
+streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476'
+```
+
+You can also pass an IMDb title URL:
+
+```bash
+streamgrabber-py 'https://www.imdb.com/title/tt0096895'
+```
+
+Or just the IMDb ID:
+
+```bash
+streamgrabber-py tt0096895
+```
+
+For IMDb inputs, the tool resolves through PlayIMDb/StreamIMDB automatically. For example:
+
+```text
+https://www.imdb.com/title/tt0096895
+-> https://streamimdb.ru/embed/movie/tt0096895
+```
+
+The same resolver also handles PlayIMDb links:
+
+```bash
+streamgrabber-py 'https://www.playimdb.com/title/tt0096895'
+```
+
+### IMDb movie example
+
+List streams for Batman 1989 from IMDb:
+
+```bash
+streamgrabber-py 'https://www.imdb.com/title/tt0096895' --list
+```
+
+Download it with defaults:
+
+```bash
+streamgrabber-py 'https://www.imdb.com/title/tt0096895'
+```
+
+Defaults still apply:
+
+- quality: `best`
+- output filename: automatic
+
+Example automatic output:
+
+```text
+Batman 1989.mkv
+```
 
 ### List detected streams
 

@@ -19,7 +19,8 @@ from .manifest import choose_variant, parse_master_playlist
 from .models import Capture, DEFAULT_USER_AGENT
 from .muxer import mux
 from .naming import output_path_from_title
-from .vaplayer import episode_info, episode_output_name, episodes_for_season, parse_media_id_from_url
+from .resolver import normalize_input_url
+from .vaplayer import episode_info, episode_output_name, episodes_for_season, movie_output_name, parse_media_id_from_url
 
 app = typer.Typer(help="Capture web streams and download them with preserved browser headers.")
 console = Console()
@@ -82,13 +83,24 @@ def main(
     if url == "doctor":
         run_doctor()
         return
+    original_url = url
+    try:
+        url = normalize_input_url(url)
+    except Exception as exc:
+        console.print(f"[red]Could not resolve input URL:[/red] {original_url}")
+        console.print(str(exc))
+        raise typer.Exit(1)
     if not check_url_like(url):
         console.print(f"[red]Invalid URL:[/red] {url}")
         console.print("Usage examples:")
         console.print("  streamgrabber-py 'https://example.com/embed/video'")
+        console.print("  streamgrabber-py 'https://www.imdb.com/title/tt0096895'")
+        console.print("  streamgrabber-py tt0096895")
         console.print("  streamgrabber-py doctor")
         raise typer.Exit(2)
-    if episodes or season is not None or episode is not None or all_episodes:
+    if url != original_url:
+        console.print(f"[cyan]Resolved:[/cyan] {original_url} -> {url}")
+    if episodes or season is not None or episode is not None or all_episodes or "/embed/movie/" in url:
         run_vaplayer_mode(url, episodes, season, episode, all_episodes, quality, output, duration, print_command, list_only)
         return
     asyncio.run(_main(url, list_only, print_command, quality, output, downloader, duration, headed, no_fallback, timeout))
@@ -110,6 +122,20 @@ def run_vaplayer_mode(
     base = episode_info(media_id, media_type)
     if episodes:
         print_summary({"media_id": media_id, "media_type": media_type, "title": base.title, "episodes": base.eps})
+        return
+
+    if media_type == "movie":
+        out = output or Path.cwd() / movie_output_name(base.title, base.file_name)
+        if list_only:
+            print_summary({
+                "title": base.title,
+                "media_id": media_id,
+                "media_type": media_type,
+                "stream_urls": base.stream_urls,
+                "output": str(out),
+            })
+            return
+        download_episode_stream(base.stream_urls[0], out, quality, duration, print_command)
         return
 
     if media_type != "tv":

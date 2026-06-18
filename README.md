@@ -16,6 +16,7 @@ It is designed for Stream Detector-style workflows where the page URL may stay t
 - For supported TV players, can list/download a specific episode or an entire season.
 - Handles fixed-URL players where episode changes happen through an internal API rather than the browser URL.
 - Accepts direct StreamIMDB embeds, IMDb title URLs, or bare IMDb IDs such as `tt0096895`.
+- Can search, download, convert, and mux matching subtitles such as Turkish (`--subtitle-lang tr`).
 
 ## Requirements
 
@@ -311,6 +312,18 @@ streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
   --quality 720
 ```
 
+### Download an entire season with Turkish subtitles
+
+```bash
+streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
+  --season 1 \
+  --all-episodes \
+  --quality 720 \
+  --subtitle-lang tr
+```
+
+For each episode, the tool searches OpenSubtitles for the selected language, chooses the best matching subtitle for that episode, converts SRT to WebVTT when needed, and muxes it into the MKV.
+
 ### Download an entire season into a directory
 
 ```bash
@@ -324,6 +337,63 @@ streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
 ```
 
 When `--output` is a directory path in season mode, every episode is saved there with an automatic filename.
+
+## Subtitles
+
+Use `--subtitle-lang` / `--sub-lang` to download and mux a matching subtitle.
+
+Turkish movie example:
+
+```bash
+streamgrabber-py 'https://www.imdb.com/title/tt0096895' \
+  --subtitle-lang tr
+```
+
+Turkish TV episode example:
+
+```bash
+streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
+  --season 1 \
+  --episode 2 \
+  --subtitle-lang tr
+```
+
+Accepted Turkish values:
+
+```text
+tr
+tur
+turkish
+türkçe
+```
+
+How subtitle matching works:
+
+1. Extracts the IMDb ID from the input.
+2. Uses the OpenSubtitles REST search endpoint.
+3. For TV episodes, searches with `season` and `episode`.
+4. Scores candidates by episode match and title/file-name match.
+5. Downloads the selected `.gz` subtitle.
+6. Decodes the subtitle with the advertised encoding, e.g. `UTF-8` or `CP1254` for Turkish.
+7. Converts SRT to WebVTT.
+8. Muxes it into the final `.mkv` as a subtitle stream.
+
+Verify subtitle muxing with:
+
+```bash
+ffprobe -v error -select_streams s \
+  -show_entries stream=index,codec_name,codec_type \
+  -of json 'output.mkv'
+```
+
+Expected subtitle stream:
+
+```json
+{
+  "codec_name": "webvtt",
+  "codec_type": "subtitle"
+}
+```
 
 ## Downloader options
 
@@ -399,13 +469,15 @@ Verified behavior:
 - Best quality is selected by default
 - S01 episode list detected
 - S01E02 short sample downloaded and muxed
-- `ffprobe` confirmed video/audio streams
+- Turkish subtitle search/download/mux verified with `--subtitle-lang tr`
+- `ffprobe` confirmed video/audio/subtitle streams
 
 Sample `ffprobe` result from a short S01E02 test:
 
 ```text
 Video: 640x360
 Audio: AAC
+Subtitle: WebVTT
 Duration: ~5s
 Container: MKV
 ```

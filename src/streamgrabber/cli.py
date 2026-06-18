@@ -20,7 +20,14 @@ from .models import Capture, DEFAULT_USER_AGENT
 from .muxer import mux
 from .naming import output_path_from_title
 from .resolver import normalize_input_url
-from .subtitles import choose_best_subtitle, download_subtitle_as_vtt, language_to_opensubtitles_id, search_subtitles
+from .subtitles import (
+    choose_best_subtitle,
+    choose_default_subtitle,
+    download_default_subtitle_as_vtt,
+    download_subtitle_as_vtt,
+    language_to_opensubtitles_id,
+    search_subtitles,
+)
 from .vaplayer import episode_info, episode_output_name, episodes_for_season, movie_output_name, parse_media_id_from_url
 
 app = typer.Typer(help="Capture web streams and download them with preserved browser headers.")
@@ -138,7 +145,7 @@ def run_vaplayer_mode(
                 "output": str(out),
             })
             return
-        download_episode_stream(base.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, title=base.title)
+        download_episode_stream(base.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, title=base.title, file_name=base.file_name, default_subs=base.default_subs)
         return
 
     if media_type != "tv":
@@ -157,7 +164,7 @@ def run_vaplayer_mode(
         for ep in eps:
             info = episode_info(media_id, media_type, season, ep)
             out = target_dir / episode_output_name(info.title, season, ep, info.file_name)
-            download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=ep, title=info.title)
+            download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=ep, title=info.title, file_name=info.file_name, default_subs=info.default_subs)
         return
 
     if season is None or episode is None:
@@ -174,7 +181,7 @@ def run_vaplayer_mode(
             "output": str(out),
         })
         return
-    download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=episode, title=info.title)
+    download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=episode, title=info.title, file_name=info.file_name, default_subs=info.default_subs)
 
 
 def download_episode_stream(
@@ -190,6 +197,8 @@ def download_episode_stream(
     season: int | None = None,
     episode: int | None = None,
     title: str = "",
+    file_name: str = "",
+    default_subs: list[dict] | None = None,
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="streamgrabber-") as tmp:
         video_ts = Path(tmp) / "video.ts"
@@ -216,19 +225,30 @@ def download_episode_stream(
         run_command(sl_cmd)
         subtitle_path: Path | None = None
         if subtitle_lang and imdb_id:
-            console.print(f"[green]Searching subtitles[/green] lang={language_to_opensubtitles_id(subtitle_lang)}")
-            candidates = search_subtitles(
-                imdb_id,
-                subtitle_lang,
-                season=season if media_type == "tv" else None,
-                episode=episode if media_type == "tv" else None,
-            )
-            selected = choose_best_subtitle(candidates, title=title, season=season if media_type == "tv" else None, episode=episode if media_type == "tv" else None)
-            if selected:
-                console.print(f"[green]Downloading subtitle[/green] {selected.get('SubFileName') or selected.get('MovieReleaseName')}")
-                subtitle_path = download_subtitle_as_vtt(selected, subtitle_vtt)
+            default_sub = choose_default_subtitle(default_subs or [], subtitle_lang)
+            if default_sub:
+                console.print(f"[green]Downloading default subtitle[/green] {default_sub.get('lang') or default_sub.get('code')}")
+                subtitle_path = download_default_subtitle_as_vtt(default_sub, subtitle_vtt)
             else:
-                console.print(f"[yellow]No subtitle found for language:[/yellow] {subtitle_lang}")
+                console.print(f"[green]Searching subtitles[/green] lang={language_to_opensubtitles_id(subtitle_lang)}")
+                candidates = search_subtitles(
+                    imdb_id,
+                    subtitle_lang,
+                    season=season if media_type == "tv" else None,
+                    episode=episode if media_type == "tv" else None,
+                )
+                selected = choose_best_subtitle(
+                    candidates,
+                    title=title,
+                    file_name=file_name,
+                    season=season if media_type == "tv" else None,
+                    episode=episode if media_type == "tv" else None,
+                )
+                if selected:
+                    console.print(f"[green]Downloading subtitle[/green] {selected.get('SubFileName') or selected.get('MovieReleaseName')}")
+                    subtitle_path = download_subtitle_as_vtt(selected, subtitle_vtt)
+                else:
+                    console.print(f"[yellow]No subtitle found for language:[/yellow] {subtitle_lang}")
         mux(str(video_ts), str(subtitle_path) if subtitle_path else None, str(output))
         console.print(f"[bold green]Saved:[/bold green] {output}")
 

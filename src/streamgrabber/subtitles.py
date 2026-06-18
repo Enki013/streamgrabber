@@ -143,10 +143,13 @@ def parse_release(filename: str) -> ParsedRelease | None:
     for name, pattern in QUALITY_PATTERNS.items():
         if pattern.search(clean):
             if name in {"2160p", "1080p", "720p", "480p"}:
-                resolution = name
-            else:
+                if resolution is None:
+                    resolution = name
+            elif quality is None:
+                # For muxed downloads we care about subtitle sync more than reproducing
+                # StreamIMDB's display-only parser quirk. Keep scanning after a resolution
+                # token so a BluRay video does not tie with WEBRip solely by downloads.
                 quality = name
-            break
 
     codec = next((name for name, pattern in CODEC_PATTERNS.items() if pattern.search(clean)), None)
     audio = next((name for name, pattern in AUDIO_PATTERNS.items() if pattern.search(clean)), None)

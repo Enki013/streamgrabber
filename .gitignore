@@ -1,0 +1,6 @@
+.venv/
+.pytest_cache/
+*.mkv
+.DS_Store
+__pycache__/
+*.pyc

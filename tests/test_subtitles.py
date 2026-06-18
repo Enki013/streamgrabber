@@ -1,8 +1,10 @@
 from streamgrabber.subtitles import (
     build_opensubtitles_search_url,
-    language_to_opensubtitles_id,
-    srt_to_vtt,
     choose_best_subtitle,
+    language_to_opensubtitles_id,
+    parse_release,
+    srt_to_vtt,
+    streamimdb_match_score,
 )
 
 
@@ -29,9 +31,46 @@ def test_srt_to_vtt_converts_timestamps():
     assert srt_to_vtt(srt).startswith('WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nMerhaba')
 
 
-def test_choose_best_subtitle_prefers_matching_episode_and_downloads():
+def test_parse_release_matches_streamimdb_ptt_fields():
+    info = parse_release('Better.Call.Saul.S01.1080p.BluRay.x264-Scene/better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.mkv')
+    assert info is not None
+    assert info.title == 'better call saul s01'
+    assert info.season == 1
+    assert info.episode == 2
+    assert info.resolution == '1080p'
+    # StreamIMDB's PTT loop stops at the first quality token; when 1080p appears
+    # before BluRay, resolution is set and quality remains unset.
+    assert info.quality is None
+    assert info.codec == 'x264'
+    assert info.release_group == 'shortbrehd'
+
+
+def test_streamimdb_match_score_rewards_exact_release_metadata():
+    video = parse_release('Better.Call.Saul.S01.1080p.BluRay.x264-Scene/better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.mkv')
+    matching = 'better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.srt'
+    mismatching = 'Better.Call.Saul.S01E03.720p.NF.WEBRip.DD5.1.x264-NTb.srt'
+    assert streamimdb_match_score(video, matching) >= 80
+    assert streamimdb_match_score(video, mismatching) < 50
+
+
+def test_choose_best_subtitle_prefers_streamimdb_ptt_match_over_downloads():
+    subs = [
+        {'SubFileName': 'Better.Call.Saul.S01E02.720p.NF.WEBRip.DD5.1.x264-NTb.srt', 'SubDownloadsCnt': '99999'},
+        {'SubFileName': 'better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.srt', 'SubDownloadsCnt': '10'},
+    ]
+    selected = choose_best_subtitle(
+        subs,
+        title='Better Call Saul 2015',
+        file_name='Better.Call.Saul.S01.1080p.BluRay.x264-Scene/better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.mkv',
+        season=1,
+        episode=2,
+    )
+    assert selected['SubFileName'] == 'better.call.saul.s01e02.1080p.bluray.x264-shortbrehd.srt'
+
+
+def test_choose_best_subtitle_falls_back_to_downloads_without_any_release_info():
     subs = [
         {'SubFileName': 'Random.Show.S01E03.srt', 'SubDownloadsCnt': '999'},
         {'SubFileName': 'Better.Call.Saul.S01E02.720p.BluRay.x264-DEFLATE.srt', 'SubDownloadsCnt': '10'},
     ]
-    assert choose_best_subtitle(subs, title='Better Call Saul 2015', season=1, episode=2)['SubFileName'].endswith('S01E02.720p.BluRay.x264-DEFLATE.srt')
+    assert choose_best_subtitle(subs)['SubFileName'] == 'Random.Show.S01E03.srt'

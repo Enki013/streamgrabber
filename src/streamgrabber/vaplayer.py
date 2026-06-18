@@ -21,6 +21,7 @@ class EpisodeInfo:
     file_name: str
     stream_urls: list[str]
     eps: dict[str, list[str]]
+    default_subs: list[dict]
 
 
 def parse_media_id_from_url(url: str) -> tuple[str, str]:
@@ -75,6 +76,7 @@ def episode_info(media_id: str, media_type: str, season: int | None = None, epis
         file_name=str(data.get("file_name") or ""),
         stream_urls=list(data.get("stream_urls") or []),
         eps={str(k): [str(x) for x in v] for k, v in (data.get("eps") or {}).items()},
+        default_subs=list(payload.get("default_subs") or []),
     )
 
 

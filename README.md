@@ -15,7 +15,7 @@ It is designed for Stream Detector-style workflows where the page URL may stay t
 - Automatically generates the output filename if you do not pass `--output`.
 - For supported TV players, can list/download a specific episode or an entire season.
 - Handles fixed-URL players where episode changes happen through an internal API rather than the browser URL.
-- Accepts direct StreamIMDB embeds, IMDb title URLs, PlayIMDb URLs, or bare IMDb IDs such as `tt0096895`.
+- Accepts direct StreamIMDB embeds, IMDb title URLs, or bare IMDb IDs such as `tt0096895`.
 
 ## Requirements
 
@@ -87,17 +87,11 @@ Or just the IMDb ID:
 streamgrabber-py tt0096895
 ```
 
-For IMDb inputs, the tool resolves through PlayIMDb/StreamIMDB automatically. For example:
+For IMDb inputs, the tool resolves to the matching StreamIMDB embed automatically. For example:
 
 ```text
 https://www.imdb.com/title/tt0096895
 -> https://streamimdb.ru/embed/movie/tt0096895
-```
-
-The same resolver also handles PlayIMDb links:
-
-```bash
-streamgrabber-py 'https://www.playimdb.com/title/tt0096895'
 ```
 
 ### IMDb movie example

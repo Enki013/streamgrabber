@@ -322,7 +322,7 @@ streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
   --subtitle-lang tr
 ```
 
-For each episode, the tool searches OpenSubtitles for the selected language, chooses the best matching subtitle for that episode, converts SRT to WebVTT when needed, and muxes it into the MKV.
+For each episode, the tool checks player-provided default subtitles first. If none match the requested language, it searches OpenSubtitles, prefers subtitle releases that match the actual video release/source (for example `BluRay x264` over a high-download `WEBRip` subtitle), converts SRT to WebVTT when needed, and muxes it into the MKV.
 
 ### Download an entire season into a directory
 
@@ -370,13 +370,22 @@ türkçe
 How subtitle matching works:
 
 1. Extracts the IMDb ID from the input.
-2. Uses the OpenSubtitles REST search endpoint.
-3. For TV episodes, searches with `season` and `episode`.
-4. Scores candidates by episode match and title/file-name match.
-5. Downloads the selected `.gz` subtitle.
-6. Decodes the subtitle with the advertised encoding, e.g. `UTF-8` or `CP1254` for Turkish.
-7. Converts SRT to WebVTT.
-8. Muxes it into the final `.mkv` as a subtitle stream.
+2. Fetches the StreamIMDB/VaPlayer metadata for the selected movie or episode.
+3. Reads the actual upstream video release filename from `data.file_name`.
+4. Checks `default_subs` from the player API first and uses the requested language if available.
+5. If there is no matching default subtitle, searches the OpenSubtitles REST endpoint.
+6. For TV episodes, searches with `season` and `episode`.
+7. Scores candidates against the video release name, prioritizing sync-critical signals:
+   - source/release type: `BluRay`, `WEBRip`, `WEB-DL`, `HDTV`
+   - season/episode: `S01E02`
+   - codec: `x264`, `x265`
+   - resolution: `1080p`, `720p`
+   - title/year/release-group matches
+8. Uses download count only as a small tiebreaker/fallback, not as the main selector.
+9. Downloads the selected subtitle (`.gz` from OpenSubtitles when needed).
+10. Decodes the subtitle with the advertised encoding, e.g. `UTF-8` or `CP1254` for Turkish.
+11. Converts SRT to WebVTT.
+12. Muxes it into the final `.mkv` as a subtitle stream.
 
 Verify subtitle muxing with:
 
@@ -470,6 +479,7 @@ Verified behavior:
 - S01 episode list detected
 - S01E02 short sample downloaded and muxed
 - Turkish subtitle search/download/mux verified with `--subtitle-lang tr`
+- Subtitle release matching verified: BluRay video prefers BluRay subtitle over high-download WEBRip/NF subtitle
 - `ffprobe` confirmed video/audio/subtitle streams
 
 Sample `ffprobe` result from a short S01E02 test:
@@ -495,7 +505,7 @@ pytest -q
 Expected at the time of writing:
 
 ```text
-18 passed
+34 passed
 ```
 
 ## Notes

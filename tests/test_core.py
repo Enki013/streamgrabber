@@ -1,5 +1,7 @@
+import subprocess
+
 from streamgrabber.manifest import parse_master_playlist, choose_variant
-from streamgrabber.downloader import build_ytdlp_command, build_streamlink_command
+from streamgrabber.downloader import build_ytdlp_command, build_streamlink_command, run_command_with_retries
 from streamgrabber.muxer import build_ffmpeg_mux_command
 
 
@@ -88,3 +90,36 @@ def test_ffmpeg_mux_embeds_webvtt_when_subtitle_exists():
         "webvtt",
         "out.mkv",
     ]
+
+
+def test_run_command_with_retries_rebuilds_command_and_succeeds(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, check):
+        calls.append(cmd)
+        if len(calls) == 1:
+            raise subprocess.CalledProcessError(1, cmd)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr("streamgrabber.downloader.subprocess.run", fake_run)
+    monkeypatch.setattr("streamgrabber.downloader.time.sleep", lambda _: None)
+
+    run_command_with_retries(lambda attempt: ["streamlink", f"url-{attempt}"], attempts=2)
+
+    assert calls == [["streamlink", "url-1"], ["streamlink", "url-2"]]
+
+
+def test_run_command_with_retries_calls_before_retry(monkeypatch):
+    retries: list[int] = []
+
+    def fake_run(cmd, check):
+        if not retries:
+            raise subprocess.CalledProcessError(1, cmd)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr("streamgrabber.downloader.subprocess.run", fake_run)
+    monkeypatch.setattr("streamgrabber.downloader.time.sleep", lambda _: None)
+
+    run_command_with_retries(lambda attempt: ["cmd", str(attempt)], attempts=2, before_retry=lambda attempt, exc: retries.append(attempt))
+
+    assert retries == [1]

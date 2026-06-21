@@ -270,6 +270,17 @@ streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --episode 2 
 streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes
 ```
 
+Each episode download is retried on transient CDN/timeout failures. On retry, the tool asks the player API for a fresh signed stream URL before calling `streamlink` again.
+
+Useful retry controls:
+
+```bash
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes --download-retries 5
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes --stop-on-error
+```
+
+By default, `--all-episodes` continues to the next episode after retries are exhausted and reports failed episode numbers at the end. Re-run the same command later to retry missing/failed files.
+
 This downloads every episode in S01 sequentially, generating filenames like:
 
 ```text
@@ -477,7 +488,7 @@ pytest -q
 Expected at the time of writing:
 
 ```text
-37 passed
+39 passed
 ```
 
 ## Notes

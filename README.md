@@ -29,7 +29,7 @@ It is designed for Stream Detector-style workflows where the page URL may stay t
 Check the local setup:
 
 ```bash
-streamgrabber-py doctor
+streamgrabber doctor
 ```
 
 Expected checks:
@@ -45,25 +45,20 @@ playwright chromium OK
 If Playwright Chromium is missing:
 
 ```bash
-cd /Users/enes/streamgrabber-py
+cd streamgrabber
 source .venv/bin/activate
 python -m playwright install chromium
 ```
 
-## Command names
+## Command name
 
-The package exposes both commands:
+Use the primary command:
 
 ```bash
-streamgrabber-py
 streamgrabber
 ```
 
-On this machine the stable command used during testing is:
-
-```bash
-streamgrabber-py
-```
+Older local installs may also expose `streamgrabber-py`, but the recommended command is `streamgrabber`.
 
 ## Basic usage
 
@@ -72,20 +67,20 @@ streamgrabber-py
 You can pass a direct embed URL:
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/movie/tt0096895'
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476'
+streamgrabber 'https://streamimdb.ru/embed/movie/tt0096895'
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476'
 ```
 
 You can also pass an IMDb title URL:
 
 ```bash
-streamgrabber-py 'https://www.imdb.com/title/tt0096895'
+streamgrabber 'https://www.imdb.com/title/tt0096895'
 ```
 
 Or just the IMDb ID:
 
 ```bash
-streamgrabber-py tt0096895
+streamgrabber tt0096895
 ```
 
 For IMDb inputs, the tool resolves to the matching StreamIMDB embed automatically. For example:
@@ -100,13 +95,13 @@ https://www.imdb.com/title/tt0096895
 List streams for Batman 1989 from IMDb:
 
 ```bash
-streamgrabber-py 'https://www.imdb.com/title/tt0096895' --list
+streamgrabber 'https://www.imdb.com/title/tt0096895' --list
 ```
 
 Download it with defaults:
 
 ```bash
-streamgrabber-py 'https://www.imdb.com/title/tt0096895'
+streamgrabber 'https://www.imdb.com/title/tt0096895'
 ```
 
 Defaults still apply:
@@ -123,7 +118,7 @@ Batman 1989.mkv
 ### List detected streams
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' --list
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --list
 ```
 
 This prints the captured HLS URL, available quality variants, detected subtitles, source name, and planned output path.
@@ -131,7 +126,7 @@ This prints the captured HLS URL, available quality variants, detected subtitles
 ### Download without specifying quality or filename
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476'
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476'
 ```
 
 Defaults:
@@ -157,38 +152,31 @@ Better Call Saul 2015 S01E02.mkv
 This is equivalent to omitting `--quality`:
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --quality best
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --quality best
 ```
 
 ### Download a specific quality
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --quality 720
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --quality 720
 ```
 
 or:
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --quality 360
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --quality 360
 ```
 
 ### Manually choose output filename
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --quality 720 \
-  --output 'Better Call Saul S01E01.mkv'
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --quality 720 --output 'Better Call Saul S01E01.mkv'
 ```
 
 Short options also work:
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  -q 720 \
-  -o 'Better Call Saul S01E01.mkv'
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' -q 720 -o 'Better Call Saul S01E01.mkv'
 ```
 
 ### Short test download
@@ -196,22 +184,19 @@ streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
 Useful before downloading a full episode:
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --quality 360 \
-  --duration 00:00:10 \
-  --output sample.mkv
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --quality 360 --duration 00:00:10 --output sample.mkv
 ```
 
 ### Print commands without downloading
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' --print-command
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --print-command
 ```
 
 or:
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' --commands
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --commands
 ```
 
 ## TV season / episode mode
@@ -227,7 +212,7 @@ The URL remains the same, but the player internally calls an API with `season` a
 ### List all available seasons and episodes
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' --episodes
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --episodes
 ```
 
 Example result:
@@ -246,10 +231,7 @@ Example result:
 ### List one season
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --season 1 \
-  --all-episodes \
-  --list
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes --list
 ```
 
 Example:
@@ -265,9 +247,7 @@ Example:
 ### Download one episode
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --season 1 \
-  --episode 2
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --episode 2
 ```
 
 Default output:
@@ -279,18 +259,13 @@ Better Call Saul 2015 S01E02.mkv
 ### Download one episode with quality
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --season 1 \
-  --episode 2 \
-  --quality 720
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --episode 2 --quality 720
 ```
 
 ### Download an entire season
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --season 1 \
-  --all-episodes
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes
 ```
 
 This downloads every episode in S01 sequentially, generating filenames like:
@@ -306,20 +281,13 @@ Better Call Saul 2015 S01E10.mkv
 ### Download an entire season at 720p
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --season 1 \
-  --all-episodes \
-  --quality 720
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes --quality 720
 ```
 
 ### Download an entire season with Turkish subtitles
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --season 1 \
-  --all-episodes \
-  --quality 720 \
-  --subtitle-lang tr
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes --quality 720 --subtitle-lang tr
 ```
 
 For each episode, the tool checks player-provided default subtitles first. If none match the requested language, it searches OpenSubtitles, prefers subtitle releases that match the actual video release/source (for example `BluRay x264` over a high-download `WEBRip` subtitle), converts SRT to WebVTT when needed, and muxes it into the MKV.
@@ -329,11 +297,7 @@ For each episode, the tool checks player-provided default subtitles first. If no
 ```bash
 mkdir -p downloads/better-call-saul-s01
 
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --season 1 \
-  --all-episodes \
-  --quality best \
-  --output downloads/better-call-saul-s01
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes --quality best --output downloads/better-call-saul-s01
 ```
 
 When `--output` is a directory path in season mode, every episode is saved there with an automatic filename.
@@ -345,17 +309,13 @@ Use `--subtitle-lang` / `--sub-lang` to download and mux a matching subtitle.
 Turkish movie example:
 
 ```bash
-streamgrabber-py 'https://www.imdb.com/title/tt0096895' \
-  --subtitle-lang tr
+streamgrabber 'https://www.imdb.com/title/tt0096895' --subtitle-lang tr
 ```
 
 Turkish TV episode example:
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --season 1 \
-  --episode 2 \
-  --subtitle-lang tr
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --episode 2 --subtitle-lang tr
 ```
 
 Accepted Turkish values:
@@ -390,9 +350,7 @@ How subtitle matching works:
 Verify subtitle muxing with:
 
 ```bash
-ffprobe -v error -select_streams s \
-  -show_entries stream=index,codec_name,codec_type \
-  -of json 'output.mkv'
+ffprobe -v error -select_streams s -show_entries stream=index,codec_name,codec_type -of json 'output.mkv'
 ```
 
 Expected subtitle stream:
@@ -415,9 +373,7 @@ streamlink
 Use `yt-dlp` instead:
 
 ```bash
-streamgrabber-py 'https://streamimdb.ru/embed/tv/tt3032476' \
-  --downloader yt-dlp \
-  --output video.mkv
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --downloader yt-dlp --output video.mkv
 ```
 
 For most captured HLS streams, `streamlink` is the recommended default.
@@ -431,13 +387,13 @@ If headless mode does not capture a stream, it automatically retries with an aut
 Disable the fallback:
 
 ```bash
-streamgrabber-py 'URL' --no-fallback
+streamgrabber 'URL' --no-fallback
 ```
 
 Force visible browser mode:
 
 ```bash
-streamgrabber-py 'URL' --headed --list
+streamgrabber 'URL' --headed --list
 ```
 
 ## Output naming
@@ -497,7 +453,7 @@ Container: MKV
 Run tests:
 
 ```bash
-cd /Users/enes/streamgrabber-py
+cd streamgrabber
 source .venv/bin/activate
 pytest -q
 ```

@@ -5,6 +5,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -14,7 +15,7 @@ from rich.table import Table
 
 from .detector import capture_streams
 from .doctor import check_url_like, run_doctor_checks
-from .downloader import build_streamlink_command, build_ytdlp_command, ensure_parent, run_command
+from .downloader import build_streamlink_command, build_ytdlp_command, ensure_parent, run_command, run_command_with_retries
 from .manifest import choose_variant, parse_master_playlist
 from .models import Capture, DEFAULT_USER_AGENT
 from .muxer import mux
@@ -90,6 +91,8 @@ def main(
     sync_subtitles: bool = typer.Option(True, "--sync-subtitles/--no-sync-subtitles", help="Auto-sync downloaded subtitles to the video audio with ffsubsync"),
     subtitle_offset: float = typer.Option(0.0, "--subtitle-offset", help="Apply an extra fixed subtitle offset in seconds after/while syncing; negative = earlier"),
     subtitle_sync_max_duration: int | None = typer.Option(None, "--subtitle-sync-max-duration", help="Limit ffsubsync analysis duration in seconds for faster tests"),
+    download_retries: int = typer.Option(3, "--download-retries", min=1, help="Retry each episode download on transient stream/CDN failures"),
+    stop_on_error: bool = typer.Option(False, "--stop-on-error/--continue-on-error", help="In --all-episodes mode, stop immediately when an episode fails"),
     timeout: int = typer.Option(15000, "--timeout", help="Capture timeout in ms"),
 ) -> None:
     """Give a page URL; automatically capture HLS/VTT, select quality, download, and mux."""
@@ -114,7 +117,7 @@ def main(
     if url != original_url:
         console.print(f"[cyan]Resolved:[/cyan] {original_url} -> {url}")
     if episodes or season is not None or episode is not None or all_episodes or "/embed/movie/" in url:
-        run_vaplayer_mode(url, episodes, season, episode, all_episodes, quality, output, duration, print_command, list_only, subtitle_lang, sync_subtitles, subtitle_offset, subtitle_sync_max_duration)
+        run_vaplayer_mode(url, episodes, season, episode, all_episodes, quality, output, duration, print_command, list_only, subtitle_lang, sync_subtitles, subtitle_offset, subtitle_sync_max_duration, download_retries, stop_on_error)
         return
     asyncio.run(_main(url, list_only, print_command, quality, output, downloader, duration, headed, no_fallback, timeout))
 
@@ -134,6 +137,8 @@ def run_vaplayer_mode(
     sync_subtitles: bool,
     subtitle_offset: float,
     subtitle_sync_max_duration: int | None,
+    download_retries: int,
+    stop_on_error: bool,
 ) -> None:
     media_type, media_id = parse_media_id_from_url(url)
     base = episode_info(media_id, media_type)
@@ -152,7 +157,7 @@ def run_vaplayer_mode(
                 "output": str(out),
             })
             return
-        download_episode_stream(base.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, title=base.title, file_name=base.file_name, default_subs=base.default_subs, sync_subtitles=sync_subtitles, subtitle_offset=subtitle_offset, subtitle_sync_max_duration=subtitle_sync_max_duration)
+        download_episode_stream(base.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, title=base.title, file_name=base.file_name, default_subs=base.default_subs, sync_subtitles=sync_subtitles, subtitle_offset=subtitle_offset, subtitle_sync_max_duration=subtitle_sync_max_duration, download_retries=download_retries)
         return
 
     if media_type != "tv":
@@ -168,10 +173,40 @@ def run_vaplayer_mode(
             print_summary({"title": base.title, "season": season, "episodes": eps})
             return
         target_dir = output if output and output.suffix == "" else Path.cwd()
+        failures: list[tuple[int, str]] = []
         for ep in eps:
             info = episode_info(media_id, media_type, season, ep)
             out = target_dir / episode_output_name(info.title, season, ep, info.file_name)
-            download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=ep, title=info.title, file_name=info.file_name, default_subs=info.default_subs, sync_subtitles=sync_subtitles, subtitle_offset=subtitle_offset, subtitle_sync_max_duration=subtitle_sync_max_duration)
+            try:
+                download_episode_stream(
+                    info.stream_urls[0],
+                    out,
+                    quality,
+                    duration,
+                    print_command,
+                    subtitle_lang=subtitle_lang,
+                    imdb_id=media_id,
+                    media_type=media_type,
+                    season=season,
+                    episode=ep,
+                    title=info.title,
+                    file_name=info.file_name,
+                    default_subs=info.default_subs,
+                    sync_subtitles=sync_subtitles,
+                    subtitle_offset=subtitle_offset,
+                    subtitle_sync_max_duration=subtitle_sync_max_duration,
+                    download_retries=download_retries,
+                    stream_url_refresh=lambda ep=ep: episode_info(media_id, media_type, season, ep).stream_urls[0],
+                )
+            except Exception as exc:
+                failures.append((ep, str(exc)))
+                console.print(f"[red]Episode S{season:02d}E{ep:02d} failed after retries:[/red] {exc}")
+                if stop_on_error:
+                    raise typer.Exit(1)
+                console.print("[yellow]Continuing with next episode. Re-run the same command later to retry failed/missing episodes.[/yellow]")
+        if failures:
+            console.print(f"[yellow]Season completed with {len(failures)} failed episode(s):[/yellow] " + ", ".join(f"E{ep:02d}" for ep, _ in failures))
+            raise typer.Exit(1)
         return
 
     if season is None or episode is None:
@@ -188,7 +223,7 @@ def run_vaplayer_mode(
             "output": str(out),
         })
         return
-    download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=episode, title=info.title, file_name=info.file_name, default_subs=info.default_subs, sync_subtitles=sync_subtitles, subtitle_offset=subtitle_offset, subtitle_sync_max_duration=subtitle_sync_max_duration)
+    download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=episode, title=info.title, file_name=info.file_name, default_subs=info.default_subs, sync_subtitles=sync_subtitles, subtitle_offset=subtitle_offset, subtitle_sync_max_duration=subtitle_sync_max_duration, download_retries=download_retries, stream_url_refresh=lambda: episode_info(media_id, media_type, season, episode).stream_urls[0])
 
 
 def download_episode_stream(
@@ -209,20 +244,30 @@ def download_episode_stream(
     sync_subtitles: bool = True,
     subtitle_offset: float = 0.0,
     subtitle_sync_max_duration: int | None = None,
+    download_retries: int = 3,
+    stream_url_refresh: Callable[[], str] | None = None,
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="streamgrabber-") as tmp:
         video_ts = Path(tmp) / "video.ts"
         subtitle_vtt = Path(tmp) / "subtitle.vtt"
         synced_subtitle_vtt = Path(tmp) / "subtitle.synced.vtt"
         streamlink_quality = "best" if quality in ("best", "auto", "") else ("worst" if quality == "worst" else f"{quality.rstrip('p')}p")
-        sl_cmd = build_streamlink_command(
-            url=url,
-            quality=streamlink_quality,
-            output=str(video_ts),
-            user_agent=DEFAULT_USER_AGENT,
-            referer="https://nextgencloudfabric.com/",
-            duration=duration,
-        )
+        current_url = url
+
+        def make_streamlink_command(attempt: int) -> list[str]:
+            nonlocal current_url
+            if attempt > 1 and stream_url_refresh:
+                current_url = stream_url_refresh()
+            return build_streamlink_command(
+                url=current_url,
+                quality=streamlink_quality,
+                output=str(video_ts),
+                user_agent=DEFAULT_USER_AGENT,
+                referer="https://nextgencloudfabric.com/",
+                duration=duration,
+            )
+
+        sl_cmd = make_streamlink_command(1)
         if print_command:
             console.print(" ".join(shlex_quote(x) for x in sl_cmd))
             if subtitle_lang and imdb_id:
@@ -233,7 +278,18 @@ def download_episode_stream(
             return
         ensure_parent(output)
         console.print(f"[green]Downloading {streamlink_quality}[/green] -> {output.name}")
-        run_command(sl_cmd)
+
+        def before_retry(attempt: int, exc: BaseException) -> None:
+            if video_ts.exists():
+                video_ts.unlink()
+            console.print(f"[yellow]Download failed on attempt {attempt}/{download_retries}; retrying with a fresh stream URL...[/yellow]")
+
+        run_command_with_retries(
+            make_streamlink_command,
+            attempts=download_retries,
+            retry_delay_seconds=2,
+            before_retry=before_retry,
+        )
         subtitle_path: Path | None = None
         if subtitle_lang and imdb_id:
             default_sub = choose_default_subtitle(default_subs or [], subtitle_lang)

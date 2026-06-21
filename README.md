@@ -58,7 +58,7 @@ Use the primary command:
 streamgrabber
 ```
 
-Older local installs may also expose `streamgrabber-py`, but the recommended command is `streamgrabber`.
+Installations from this repository expose `streamgrabber`. If your shell still runs an older Node prototype, remove or overwrite that old executable from your `PATH`.
 
 ## Basic usage
 

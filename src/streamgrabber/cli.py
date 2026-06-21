@@ -28,6 +28,7 @@ from .subtitles import (
     language_to_opensubtitles_id,
     search_subtitles,
 )
+from .subsync import prepare_subtitle_for_mux
 from .vaplayer import episode_info, episode_output_name, episodes_for_season, movie_output_name, parse_media_id_from_url
 
 app = typer.Typer(help="Capture web streams and download them with preserved browser headers.")
@@ -86,6 +87,9 @@ def main(
     episode: int | None = typer.Option(None, "--episode", help="TV episode number for supported players"),
     all_episodes: bool = typer.Option(False, "--all-episodes", help="Download all episodes in --season when supported"),
     subtitle_lang: str | None = typer.Option(None, "--subtitle-lang", "--sub-lang", help="Download and mux best matching subtitle language, e.g. tr/tur/turkish"),
+    sync_subtitles: bool = typer.Option(True, "--sync-subtitles/--no-sync-subtitles", help="Auto-sync downloaded subtitles to the video audio with ffsubsync"),
+    subtitle_offset: float = typer.Option(0.0, "--subtitle-offset", help="Apply an extra fixed subtitle offset in seconds after/while syncing; negative = earlier"),
+    subtitle_sync_max_duration: int | None = typer.Option(None, "--subtitle-sync-max-duration", help="Limit ffsubsync analysis duration in seconds for faster tests"),
     timeout: int = typer.Option(15000, "--timeout", help="Capture timeout in ms"),
 ) -> None:
     """Give a page URL; automatically capture HLS/VTT, select quality, download, and mux."""
@@ -102,15 +106,15 @@ def main(
     if not check_url_like(url):
         console.print(f"[red]Invalid URL:[/red] {url}")
         console.print("Usage examples:")
-        console.print("  streamgrabber-py 'https://example.com/embed/video'")
-        console.print("  streamgrabber-py 'https://www.imdb.com/title/tt0096895'")
-        console.print("  streamgrabber-py tt0096895")
-        console.print("  streamgrabber-py doctor")
+        console.print("  streamgrabber 'https://example.com/embed/video'")
+        console.print("  streamgrabber 'https://www.imdb.com/title/tt0096895'")
+        console.print("  streamgrabber tt0096895")
+        console.print("  streamgrabber doctor")
         raise typer.Exit(2)
     if url != original_url:
         console.print(f"[cyan]Resolved:[/cyan] {original_url} -> {url}")
     if episodes or season is not None or episode is not None or all_episodes or "/embed/movie/" in url:
-        run_vaplayer_mode(url, episodes, season, episode, all_episodes, quality, output, duration, print_command, list_only, subtitle_lang)
+        run_vaplayer_mode(url, episodes, season, episode, all_episodes, quality, output, duration, print_command, list_only, subtitle_lang, sync_subtitles, subtitle_offset, subtitle_sync_max_duration)
         return
     asyncio.run(_main(url, list_only, print_command, quality, output, downloader, duration, headed, no_fallback, timeout))
 
@@ -127,6 +131,9 @@ def run_vaplayer_mode(
     print_command: bool,
     list_only: bool,
     subtitle_lang: str | None,
+    sync_subtitles: bool,
+    subtitle_offset: float,
+    subtitle_sync_max_duration: int | None,
 ) -> None:
     media_type, media_id = parse_media_id_from_url(url)
     base = episode_info(media_id, media_type)
@@ -145,7 +152,7 @@ def run_vaplayer_mode(
                 "output": str(out),
             })
             return
-        download_episode_stream(base.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, title=base.title, file_name=base.file_name, default_subs=base.default_subs)
+        download_episode_stream(base.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, title=base.title, file_name=base.file_name, default_subs=base.default_subs, sync_subtitles=sync_subtitles, subtitle_offset=subtitle_offset, subtitle_sync_max_duration=subtitle_sync_max_duration)
         return
 
     if media_type != "tv":
@@ -164,7 +171,7 @@ def run_vaplayer_mode(
         for ep in eps:
             info = episode_info(media_id, media_type, season, ep)
             out = target_dir / episode_output_name(info.title, season, ep, info.file_name)
-            download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=ep, title=info.title, file_name=info.file_name, default_subs=info.default_subs)
+            download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=ep, title=info.title, file_name=info.file_name, default_subs=info.default_subs, sync_subtitles=sync_subtitles, subtitle_offset=subtitle_offset, subtitle_sync_max_duration=subtitle_sync_max_duration)
         return
 
     if season is None or episode is None:
@@ -181,7 +188,7 @@ def run_vaplayer_mode(
             "output": str(out),
         })
         return
-    download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=episode, title=info.title, file_name=info.file_name, default_subs=info.default_subs)
+    download_episode_stream(info.stream_urls[0], out, quality, duration, print_command, subtitle_lang=subtitle_lang, imdb_id=media_id, media_type=media_type, season=season, episode=episode, title=info.title, file_name=info.file_name, default_subs=info.default_subs, sync_subtitles=sync_subtitles, subtitle_offset=subtitle_offset, subtitle_sync_max_duration=subtitle_sync_max_duration)
 
 
 def download_episode_stream(
@@ -199,10 +206,14 @@ def download_episode_stream(
     title: str = "",
     file_name: str = "",
     default_subs: list[dict] | None = None,
+    sync_subtitles: bool = True,
+    subtitle_offset: float = 0.0,
+    subtitle_sync_max_duration: int | None = None,
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="streamgrabber-") as tmp:
         video_ts = Path(tmp) / "video.ts"
         subtitle_vtt = Path(tmp) / "subtitle.vtt"
+        synced_subtitle_vtt = Path(tmp) / "subtitle.synced.vtt"
         streamlink_quality = "best" if quality in ("best", "auto", "") else ("worst" if quality == "worst" else f"{quality.rstrip('p')}p")
         sl_cmd = build_streamlink_command(
             url=url,
@@ -249,6 +260,22 @@ def download_episode_stream(
                     subtitle_path = download_subtitle_as_vtt(selected, subtitle_vtt)
                 else:
                     console.print(f"[yellow]No subtitle found for language:[/yellow] {subtitle_lang}")
+            if subtitle_path:
+                try:
+                    if sync_subtitles:
+                        console.print("[green]Syncing subtitles[/green] with video audio via ffsubsync")
+                    elif subtitle_offset:
+                        console.print(f"[green]Applying subtitle offset[/green] {subtitle_offset:+.3f}s")
+                    subtitle_path = prepare_subtitle_for_mux(
+                        video_ts,
+                        subtitle_path,
+                        synced_subtitle_vtt,
+                        sync=sync_subtitles,
+                        offset_seconds=subtitle_offset,
+                        max_duration_seconds=subtitle_sync_max_duration,
+                    )
+                except Exception as exc:
+                    console.print(f"[yellow]Subtitle sync failed; using unsynced subtitle:[/yellow] {exc}")
         mux(str(video_ts), str(subtitle_path) if subtitle_path else None, str(output))
         console.print(f"[bold green]Saved:[/bold green] {output}")
 
@@ -283,7 +310,8 @@ def run_doctor() -> None:
     if not ok:
         console.print(
             "[yellow]Tip:[/yellow] install missing dependencies, e.g. "
-            "`brew install ffmpeg streamlink yt-dlp` and "
+            "`brew install ffmpeg streamlink yt-dlp`, "
+            "`python -m pip install ffsubsync`, and "
             "`python -m playwright install chromium`."
         )
         raise typer.Exit(1)

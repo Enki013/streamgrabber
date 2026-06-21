@@ -25,6 +25,7 @@ It is designed for Stream Detector-style workflows where the page URL may stay t
 - `streamlink`
 - `yt-dlp` optional but recommended
 - `ffmpeg` / `ffprobe`
+- `ffsubsync` for automatic subtitle synchronization
 
 Check the local setup:
 
@@ -39,6 +40,7 @@ ffmpeg              OK
 ffprobe             OK
 streamlink          OK
 yt-dlp              OK
+ffsubsync           OK
 playwright chromium OK
 ```
 
@@ -290,7 +292,7 @@ streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episod
 streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes --quality 720 --subtitle-lang tr
 ```
 
-For each episode, the tool checks player-provided default subtitles first. If none match the requested language, it searches OpenSubtitles, prefers subtitle releases that match the actual video release/source (for example `BluRay x264` over a high-download `WEBRip` subtitle), converts SRT to WebVTT when needed, and muxes it into the MKV.
+For each episode, the tool checks player-provided default subtitles first. If none match the requested language, it searches OpenSubtitles, prefers subtitle releases that match the actual video release/source (for example `BluRay x264` over a high-download `WEBRip` subtitle), automatically syncs the subtitle to the downloaded video audio with `ffsubsync`, converts SRT to WebVTT when needed, and muxes it into the MKV.
 
 ### Download an entire season into a directory
 
@@ -317,6 +319,17 @@ Turkish TV episode example:
 ```bash
 streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --episode 2 --subtitle-lang tr
 ```
+
+Subtitle sync is enabled by default. Useful controls:
+
+```bash
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --episode 2 --subtitle-lang tr --no-sync-subtitles
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --episode 2 --subtitle-lang tr --subtitle-offset -1.5
+```
+
+- `--no-sync-subtitles` disables `ffsubsync` and muxes the selected subtitle as-is.
+- `--subtitle-offset SECONDS` applies an extra fixed offset; negative values make subtitles earlier, positive values make them later.
+- `--subtitle-sync-max-duration SECONDS` limits ffsubsync analysis for short tests/debugging.
 
 Accepted Turkish values:
 
@@ -345,7 +358,9 @@ How subtitle matching works:
 9. Downloads the selected subtitle (`.gz` from OpenSubtitles when needed).
 10. Decodes the subtitle with the advertised encoding, e.g. `UTF-8` or `CP1254` for Turkish.
 11. Converts SRT to WebVTT.
-12. Muxes it into the final `.mkv` as a subtitle stream.
+12. Runs `ffsubsync` against the downloaded video/audio to correct fixed offsets and framerate drift.
+13. Applies any extra `--subtitle-offset` requested by the user.
+14. Muxes the synced subtitle into the final `.mkv` as a subtitle stream.
 
 Verify subtitle muxing with:
 
@@ -436,6 +451,7 @@ Verified behavior:
 - S01E02 short sample downloaded and muxed
 - Turkish subtitle search/download/mux verified with `--subtitle-lang tr`
 - Subtitle release matching verified: BluRay video prefers BluRay subtitle over high-download WEBRip/NF subtitle
+- Automatic subtitle sync path verified with `ffsubsync`
 - `ffprobe` confirmed video/audio/subtitle streams
 
 Sample `ffprobe` result from a short S01E02 test:
@@ -461,7 +477,7 @@ pytest -q
 Expected at the time of writing:
 
 ```text
-34 passed
+37 passed
 ```
 
 ## Notes

@@ -1,8 +1,26 @@
-# streamgrabber
+# Streamgrabber — IMDb/StreamIMDb HLS/M3U8 Video Downloader
 
-`streamgrabber` is a CLI tool that takes a web/embed video URL, captures HLS/DASH/subtitle streams, downloads the selected quality with the right browser headers, and muxes the result to MKV.
+`streamgrabber` is a Python CLI stream downloader for movies and TV shows. Paste an IMDb, StreamIMDb, embed, or web video URL and it can auto-detect HLS/M3U8/DASH streams, subtitles, seasons, episodes, and mux the download to MKV with `ffmpeg`.
 
-It is designed for Stream Detector-style workflows where the page URL may stay the same while the player internally changes episodes/sources.
+It is designed for Stream Detector-style workflows where the browser URL may stay fixed while the player internally changes episodes, sources, signed stream URLs, or subtitle tracks.
+
+If Streamgrabber saves you time, consider giving the repo a star ⭐
+
+## Quick examples
+
+```bash
+streamgrabber 'https://www.imdb.com/title/tt0096895'
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --season 1 --all-episodes --quality 720 --subtitle-lang tr
+streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --episodes
+```
+
+## What Streamgrabber does
+
+- IMDb / StreamIMDb video downloader for movies and TV series.
+- HLS/M3U8 stream downloader with browser header preservation.
+- Season and episode downloader for fixed-URL players.
+- Subtitle downloader, matcher, syncer, converter, and MKV muxer.
+- CLI workflow powered by Playwright, streamlink, yt-dlp, ffmpeg, and ffsubsync.
 
 ## Features
 

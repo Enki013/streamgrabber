@@ -61,6 +61,42 @@ streamgrabber 'https://streamimdb.ru/embed/tv/tt3032476' --episodes
 - Accepts direct StreamIMDB embeds, IMDb title URLs, or bare IMDb IDs such as `tt0096895`.
 - Can search, download, convert, and mux matching subtitles such as Turkish (`--subtitle-lang tr`).
 
+## How It Works
+
+Streamgrabber automates the entire video extraction and processing pipeline by acting as a headless browser to sniff out hidden stream URLs and subtitles.
+
+```mermaid
+graph TD
+    A["Input URL\n(IMDb ID / Embed)"] --> B["Playwright Chromium\n(Network Interceptor)"]
+    B --> C{"Captures Data"}
+    
+    C -- "HLS / M3U8" --> D["Video Downloader\n(streamlink / yt-dlp)"]
+    C -- "VTT / SRT" --> E["Subtitle Processor"]
+    C -- "Episode APIs" --> F["Series Tracker\n(Navigates seasons)"]
+    
+    F -.->|"Next Episode"| B
+    
+    D --> G["ffsubsync\n(Audio Sync)"]
+    E --> G
+    
+    D --> H["ffmpeg\n(MKV Muxer)"]
+    G --> H
+    
+    H --> I["Final Output\n(.mkv)"]
+
+    classDef input fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#fff
+    classDef browser fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#fff
+    classDef extract fill:#e67e22,stroke:#d35400,stroke-width:2px,color:#fff
+    classDef tool fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff
+    classDef output fill:#1abc9c,stroke:#16a085,stroke-width:2px,color:#fff
+
+    class A input
+    class B browser
+    class C,F extract
+    class D,E,G,H tool
+    class I output
+```
+
 ## Requirements
 
 - Python 3.11+

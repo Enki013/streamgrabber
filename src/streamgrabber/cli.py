@@ -16,6 +16,7 @@ from rich.table import Table
 from .detector import capture_streams
 from .doctor import check_url_like, run_doctor_checks
 from .downloader import build_streamlink_command, build_ytdlp_command, ensure_parent, run_command, run_command_with_retries
+from .exceptions import MissingDependencyError, ensure_binary_available, get_platform_doctor_tip
 from .manifest import choose_variant, parse_master_playlist
 from .models import Capture, DEFAULT_USER_AGENT
 from .muxer import mux
@@ -114,12 +115,16 @@ def main(
         console.print("  streamgrabber tt0096895")
         console.print("  streamgrabber doctor")
         raise typer.Exit(2)
-    if url != original_url:
-        console.print(f"[cyan]Resolved:[/cyan] {original_url} -> {url}")
-    if episodes or season is not None or episode is not None or all_episodes or "/embed/movie/" in url:
-        run_vaplayer_mode(url, episodes, season, episode, all_episodes, quality, output, duration, print_command, list_only, subtitle_lang, sync_subtitles, subtitle_offset, subtitle_sync_max_duration, download_retries, stop_on_error)
-        return
-    asyncio.run(_main(url, list_only, print_command, quality, output, downloader, duration, headed, no_fallback, timeout))
+    try:
+        if url != original_url:
+            console.print(f"[cyan]Resolved:[/cyan] {original_url} -> {url}")
+        if episodes or season is not None or episode is not None or all_episodes or "/embed/movie/" in url:
+            run_vaplayer_mode(url, episodes, season, episode, all_episodes, quality, output, duration, print_command, list_only, subtitle_lang, sync_subtitles, subtitle_offset, subtitle_sync_max_duration, download_retries, stop_on_error)
+            return
+        asyncio.run(_main(url, list_only, print_command, quality, output, downloader, duration, headed, no_fallback, timeout))
+    except MissingDependencyError as exc:
+        console.print(f"[bold red]Missing dependency error:[/bold red]\n{exc}")
+        raise typer.Exit(1)
 
 
 def run_vaplayer_mode(
@@ -198,6 +203,8 @@ def run_vaplayer_mode(
                     download_retries=download_retries,
                     stream_url_refresh=lambda ep=ep: episode_info(media_id, media_type, season, ep).stream_urls[0],
                 )
+            except MissingDependencyError:
+                raise
             except Exception as exc:
                 failures.append((ep, str(exc)))
                 console.print(f"[red]Episode S{season:02d}E{ep:02d} failed after retries:[/red] {exc}")
@@ -276,6 +283,8 @@ def download_episode_stream(
             else:
                 console.print(" ".join(shlex_quote(x) for x in ["ffmpeg", "-y", "-i", str(video_ts), "-c", "copy", str(output)]))
             return
+        ensure_binary_available("streamlink")
+        ensure_binary_available("ffmpeg")
         ensure_parent(output)
         console.print(f"[green]Downloading {streamlink_quality}[/green] -> {output.name}")
 
@@ -364,12 +373,7 @@ def run_doctor() -> None:
 
     console.print(table)
     if not ok:
-        console.print(
-            "[yellow]Tip:[/yellow] install missing dependencies, e.g. "
-            "`brew install ffmpeg streamlink yt-dlp`, "
-            "`python -m pip install ffsubsync`, and "
-            "`python -m playwright install chromium`."
-        )
+        console.print(f"[yellow]Tip:[/yellow] {get_platform_doctor_tip()}")
         raise typer.Exit(1)
 
 
@@ -428,6 +432,7 @@ async def _main(
         if print_command:
             console.print(" ".join(shlex_quote(x) for x in cmd))
             return
+        ensure_binary_available("yt-dlp")
         ensure_parent(out)
         run_command(cmd)
         return
@@ -450,6 +455,8 @@ async def _main(
                 console.print(f"# subtitle: {subtitle.url}")
             console.print(" ".join(shlex_quote(x) for x in ["ffmpeg", "-y", "-i", str(video_ts), "...", str(out)]))
             return
+        ensure_binary_available("streamlink")
+        ensure_binary_available("ffmpeg")
         ensure_parent(out)
         console.print(f"[green]Downloading {streamlink_quality} with streamlink[/green]")
         run_command(sl_cmd)

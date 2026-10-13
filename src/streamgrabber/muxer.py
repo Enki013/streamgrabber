@@ -3,6 +3,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from .exceptions import MissingDependencyError
+
 
 def build_ffmpeg_mux_command(video: str, subtitle: str | None, output: str) -> list[str]:
     if subtitle:
@@ -24,4 +26,8 @@ def build_ffmpeg_mux_command(video: str, subtitle: str | None, output: str) -> l
 
 def mux(video: str, subtitle: str | None, output: str) -> None:
     Path(output).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(build_ffmpeg_mux_command(video, subtitle, output), check=True)
+    cmd = build_ffmpeg_mux_command(video, subtitle, output)
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError as exc:
+        raise MissingDependencyError("ffmpeg") from exc

@@ -101,10 +101,31 @@ graph TD
 
 - Python 3.11+
 - Playwright Chromium
-- `streamlink`
-- `yt-dlp` optional but recommended
-- `ffmpeg` / `ffprobe`
-- `ffsubsync` for automatic subtitle synchronization
+- `streamlink` (used by default for HLS stream downloading)
+- `ffmpeg` / `ffprobe` (used for muxing into MKV)
+- `yt-dlp` (optional alternate downloader)
+- `ffsubsync` (optional, for automatic subtitle synchronization)
+
+### Installing external tools
+
+**macOS (Homebrew):**
+```bash
+brew install ffmpeg streamlink yt-dlp
+pip install ffsubsync
+```
+
+**Windows (winget / pip):**
+```powershell
+winget install Streamlink.Streamlink Gyan.FFmpeg yt-dlp
+pip install ffsubsync
+```
+*(Alternatively, install `streamlink` with `pip install streamlink`)*
+
+**Linux (Debian / Ubuntu):**
+```bash
+sudo apt install ffmpeg streamlink yt-dlp
+pip install ffsubsync
+```
 
 Check the local setup:
 
@@ -126,8 +147,6 @@ playwright chromium OK
 If Playwright Chromium is missing:
 
 ```bash
-cd streamgrabber
-source .venv/bin/activate
 python -m playwright install chromium
 ```
 

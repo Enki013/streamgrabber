@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .exceptions import MissingDependencyError
+
 TIMESTAMP_RE = re.compile(r"(?P<h>\d{2}):(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d{3})")
 
 
@@ -81,7 +83,6 @@ def shift_subtitle_file(input_path: str | Path, output_path: str | Path, offset_
     output_path.write_text(TIMESTAMP_RE.sub(repl, text), encoding="utf-8")
     return output_path
 
-
 def sync_subtitle_to_video(
     video: str | Path,
     subtitle: str | Path,
@@ -93,7 +94,7 @@ def sync_subtitle_to_video(
     """Synchronize a subtitle file to a video/audio reference using ffsubsync."""
     executable = find_ffsubsync()
     if not executable:
-        raise FileNotFoundError("ffsubsync is not installed or not on PATH")
+        raise MissingDependencyError("ffsubsync")
     cmd = build_ffsubsync_command(
         video,
         subtitle,
@@ -102,7 +103,10 @@ def sync_subtitle_to_video(
         max_duration_seconds=max_duration_seconds,
         executable=executable,
     )
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError as exc:
+        raise MissingDependencyError("ffsubsync") from exc
     return Path(output)
 
 

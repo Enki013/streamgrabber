@@ -5,6 +5,12 @@ import shutil
 import subprocess
 from urllib.parse import urlparse
 
+from .exceptions import (
+    MissingDependencyError,
+    ensure_binary_available,
+    get_install_instruction,
+    get_platform_doctor_tip,
+)
 from .subsync import find_ffsubsync
 
 

@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from .exceptions import MissingDependencyError
 from .models import DEFAULT_USER_AGENT
 
 
@@ -54,7 +55,12 @@ def build_streamlink_command(
 
 
 def run_command(cmd: list[str]) -> None:
-    subprocess.run(cmd, check=True)
+    if not cmd:
+        return
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError as exc:
+        raise MissingDependencyError(cmd[0]) from exc
 
 
 def run_command_with_retries(
@@ -67,9 +73,13 @@ def run_command_with_retries(
     """Run a command with retries. command_factory receives the 1-based attempt number."""
     last_exc: BaseException | None = None
     for attempt in range(1, attempts + 1):
+        cmd = command_factory(attempt)
         try:
-            subprocess.run(command_factory(attempt), check=True)
+            subprocess.run(cmd, check=True)
             return
+        except FileNotFoundError as exc:
+            exe = cmd[0] if cmd else "unknown"
+            raise MissingDependencyError(exe) from exc
         except subprocess.CalledProcessError as exc:
             last_exc = exc
             if attempt >= attempts:

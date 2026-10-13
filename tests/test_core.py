@@ -1,8 +1,10 @@
 import subprocess
+import pytest
 
+from streamgrabber.exceptions import MissingDependencyError
 from streamgrabber.manifest import parse_master_playlist, choose_variant
-from streamgrabber.downloader import build_ytdlp_command, build_streamlink_command, run_command_with_retries
-from streamgrabber.muxer import build_ffmpeg_mux_command
+from streamgrabber.downloader import build_ytdlp_command, build_streamlink_command, run_command, run_command_with_retries
+from streamgrabber.muxer import build_ffmpeg_mux_command, mux
 
 
 def test_parse_master_playlist_extracts_variants():
@@ -123,3 +125,43 @@ def test_run_command_with_retries_calls_before_retry(monkeypatch):
     run_command_with_retries(lambda attempt: ["cmd", str(attempt)], attempts=2, before_retry=lambda attempt, exc: retries.append(attempt))
 
     assert retries == [1]
+
+
+def test_run_command_raises_missing_dependency_error(monkeypatch):
+    def fake_run(cmd, check):
+        raise FileNotFoundError(2, "No such file or directory", cmd[0])
+
+    monkeypatch.setattr("streamgrabber.downloader.subprocess.run", fake_run)
+
+    with pytest.raises(MissingDependencyError) as exc_info:
+        run_command(["streamlink", "arg1"])
+    assert exc_info.value.binary == "streamlink"
+
+
+def test_run_command_with_retries_raises_missing_dependency_error_immediately(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, check):
+        calls.append(cmd)
+        raise FileNotFoundError(2, "No such file or directory", cmd[0])
+
+    monkeypatch.setattr("streamgrabber.downloader.subprocess.run", fake_run)
+
+    with pytest.raises(MissingDependencyError) as exc_info:
+        run_command_with_retries(lambda attempt: ["streamlink", str(attempt)], attempts=5)
+
+    assert exc_info.value.binary == "streamlink"
+    assert len(calls) == 1  # Did not waste retries when executable is missing
+
+
+def test_mux_raises_missing_dependency_error_on_file_not_found(monkeypatch, tmp_path):
+    def fake_run(cmd, check):
+        raise FileNotFoundError(2, "No such file or directory", cmd[0])
+
+    monkeypatch.setattr("streamgrabber.muxer.subprocess.run", fake_run)
+
+    out_file = tmp_path / "out.mkv"
+    with pytest.raises(MissingDependencyError) as exc_info:
+        mux("in.ts", None, str(out_file))
+
+    assert exc_info.value.binary == "ffmpeg"
